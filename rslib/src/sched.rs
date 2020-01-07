@@ -459,6 +459,8 @@ mod test {
         let offset = mdt.utc_minus_local() / 60;
         let now = mdt.ymd(2018, 10, 29).and_hms(0,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 0), 0);
+        let now = mdt.ymd(2018, 10, 29).and_hms(23,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 0), 0);
         let now = mdt.ymd(2018, 10, 30).and_hms(0,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 0), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(0,0,0).timestamp();
