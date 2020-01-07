@@ -53,7 +53,7 @@ fn days_elapsed(start: i64, end: i64, rollover_today: i64) -> u32 {
     println!("rollover_dt: {}", rollover_dt);
 
     // get the number of full days that have elapsed
-    let secs = (end - start).max(0);
+    let secs = (rollover_today - start).max(0);
     let days = (secs / 86_400) as u32;
     println!("days: {}", days);
 
@@ -168,6 +168,17 @@ mod test {
         // to DST, but the number shouldn't change
         let offset = mdt.utc_minus_local() / 60;
         assert_eq!(elap(crt, now, offset, 4), 507);
+
+        // collection created at 3am on the 6th, so day 1 starts at 4am on the 7th, and day 3 on the 9th.
+        let crt = mdt.ymd(2018, 8, 6).and_hms(3, 0, 0).timestamp();
+        let mst_offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2018, 8, 9).and_hms(1, 59, 59).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, 4), 2);
+        let now = mst.ymd(2018, 8, 9).and_hms(3, 59, 59).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, 4), 2);
+        let now = mst.ymd(2018, 8, 9).and_hms(4, 0, 0).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, 4), 3);
+
 
         // Test daylight saving time shift handling
         // For TZ America/Denver
@@ -597,5 +608,6 @@ mod test {
         // sure to fail
         assert_eq!(1, 2);
 
+=======
     }
 }
