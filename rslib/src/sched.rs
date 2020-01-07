@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, FixedOffset, Local, TimeZone};
+use chrono::{DateTime, Datelike, FixedOffset, Local, Timelike, TimeZone};
 
 pub struct SchedTimingToday {
     /// The number of days that have passed since the collection was created.
@@ -41,7 +41,7 @@ fn rollover_for_today(
 }
 
 /// The number of times the day rolled over between two timestamps.
-fn days_elapsed(start: i64, end: i64, rollover_today: i64) -> u32 {
+fn days_elapsed_test(start: i64, end: i64, rollover_today: i64) -> u32 {
     println!();
     println!("start: {}", start);
     let start_dt = Local.timestamp(start, 0);
@@ -53,10 +53,55 @@ fn days_elapsed(start: i64, end: i64, rollover_today: i64) -> u32 {
     println!("rollover: {}", rollover_today);
     println!("rollover_dt: {}", rollover_dt);
 
+    let rollover_dt = Local.timestamp(rollover_today, 0);
+    println!("rollover hour: {}", rollover_dt.hour());
+
+    let start_dt = Local.timestamp(start, 0);
+
+    let reference_dt = Local
+        .ymd(start_dt.year(), start_dt.month(), start_dt.day())
+        .and_hms(rollover_dt.hour(), 0, 0);
+
+    println!("reference time: {}", reference_dt);
+
+    let reference = reference_dt.timestamp() - 3601;
+
+
+    println!("reference: {}", reference);
+    let x = Local.timestamp(reference, 0);
+    println!("actual reference time: {}", x);
+
+
     // get the number of full days that have elapsed
-    let secs = (rollover_today - start).max(0);
+    let secs = (rollover_today - reference).max(0);
     let days = (secs / 86_400) as u32;
     println!("days: {} leaving {}", days, (secs % 86_400));
+
+    // minus one if today's cutoff hasn't passed
+    if days > 0 && end < rollover_today {
+        days - 1
+    } else {
+        days
+    }
+}
+
+/// The number of times the day rolled over between two timestamps.
+fn days_elapsed(start: i64, end: i64, rollover_today: i64) -> u32 {
+
+    let rollover_dt = Local.timestamp(rollover_today, 0);
+
+    let start_dt = Local.timestamp(start, 0);
+
+    let reference_dt = Local
+        .ymd(start_dt.year(), start_dt.month(), start_dt.day())
+        .and_hms(rollover_dt.hour(), 0, 0);
+
+    let reference = reference_dt.timestamp() - 3601;
+
+
+    // get the number of full days that have elapsed
+    let secs = (rollover_today - reference).max(0);
+    let days = (secs / 86_400) as u32;
 
     // minus one if today's cutoff hasn't passed
     if days > 0 && end < rollover_today {
@@ -363,31 +408,31 @@ mod test {
         let now = mdt.ymd(2018, 10, 30).and_hms(0,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 0);
         let now = mdt.ymd(2018, 10, 30).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
+        assert_eq!(elap(crt, now, offset, 4), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
+        assert_eq!(elap(crt, now, offset, 4), 1);
         // With crt an hour after rollover time
         // day 1 doesn't start until almost two days later
         let now = mdt.ymd(2018, 10, 31).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 1);
+        assert_eq!(elap(crt, now, offset, 4), 2);
         let now = mdt.ymd(2018, 11, 1).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 1);
+        assert_eq!(elap(crt, now, offset, 4), 2);
         let now = mdt.ymd(2018, 11, 1).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 1);
+        assert_eq!(elap(crt, now, offset, 4), 2);
         let now = mdt.ymd(2018, 11, 1).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 1).and_hms(4,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 1).and_hms(5,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 1).and_hms(6,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 1).and_hms(7,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 1).and_hms(23,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 2).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
 
         //
         //
@@ -399,9 +444,9 @@ mod test {
         println!();
         let crt = mdt.ymd(2018, 10, 29).and_hms(23, 59, 59).timestamp();
         let offset = mdt.utc_minus_local() / 60;
-        let now = mdt.ymd(2018, 10, 31).and_hms(3,59,59).timestamp();
+        let now = mdt.ymd(2018, 10, 30).and_hms(3,59,59).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 0);
-        let now = mdt.ymd(2018, 10, 31).and_hms(4,0,0).timestamp();
+        let now = mdt.ymd(2018, 10, 30).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 1);
 
 
@@ -415,21 +460,21 @@ mod test {
         let now = mdt.ymd(2018, 10, 29).and_hms(0,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 0), 0);
         let now = mdt.ymd(2018, 10, 30).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 0), 0);
+        assert_eq!(elap(crt, now, offset, 0), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 0), 1);
+        assert_eq!(elap(crt, now, offset, 0), 2);
         let now = mdt.ymd(2018, 10, 31).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 0), 1);
+        assert_eq!(elap(crt, now, offset, 0), 2);
         let now = mdt.ymd(2018, 10, 31).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 0), 1);
+        assert_eq!(elap(crt, now, offset, 0), 2);
         let now = mdt.ymd(2018, 10, 31).and_hms(23,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 0), 1);
+        assert_eq!(elap(crt, now, offset, 0), 2);
         let now = mdt.ymd(2018, 11, 1).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 0), 2);
+        assert_eq!(elap(crt, now, offset, 0), 3);
         let now = mdt.ymd(2018, 11, 1).and_hms(0,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 0), 2);
+        assert_eq!(elap(crt, now, offset, 0), 3);
         let now = mdt.ymd(2018, 11, 1).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 0), 2);
+        assert_eq!(elap(crt, now, offset, 0), 3);
 
 
         //
@@ -464,115 +509,115 @@ mod test {
         let now = mdt.ymd(2018, 10, 30).and_hms(3,59,59).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 0);
         let now = mdt.ymd(2018, 10, 30).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
+        assert_eq!(elap(crt, now, offset, 4), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
+        assert_eq!(elap(crt, now, offset, 4), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
+        assert_eq!(elap(crt, now, offset, 4), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
+        assert_eq!(elap(crt, now, offset, 4), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(3,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
+        assert_eq!(elap(crt, now, offset, 4), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
+        assert_eq!(elap(crt, now, offset, 4), 1);
         let now = mdt.ymd(2018, 10, 31).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 1);
+        assert_eq!(elap(crt, now, offset, 4), 2);
         let now = mdt.ymd(2018, 11, 1).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 1);
+        assert_eq!(elap(crt, now, offset, 4), 2);
         let now = mdt.ymd(2018, 11, 1).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 1);
+        assert_eq!(elap(crt, now, offset, 4), 2);
         let now = mdt.ymd(2018, 11, 1).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 2).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 2).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mdt.ymd(2018, 11, 2).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 3);
+        assert_eq!(elap(crt, now, offset, 4), 4);
         let now = mdt.ymd(2018, 11, 2).and_hms(6,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 3);
+        assert_eq!(elap(crt, now, offset, 4), 4);
         let now = mdt.ymd(2018, 11, 2).and_hms(23,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 3);
+        assert_eq!(elap(crt, now, offset, 4), 4);
         let now = mdt.ymd(2018, 11, 3).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 3);
+        assert_eq!(elap(crt, now, offset, 4), 4);
         let now = mdt.ymd(2018, 11, 3).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 3);
+        assert_eq!(elap(crt, now, offset, 4), 4);
         let now = mdt.ymd(2018, 11, 3).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         let now = mdt.ymd(2018, 11, 3).and_hms(23,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         // On 4 Nov, switch to MST at 2am
         // Until the switch, days elapsed should be 5
         let now = mdt.ymd(2018, 11, 4).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         let now = mdt.ymd(2018, 11, 4).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         let now = mdt.ymd(2018, 11, 4).and_hms(1,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         // Make sure both ends of the fold are correct
         // Test the fold - 2am MDT is 1am MST
         let now = mdt.ymd(2018, 11, 4).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         let offset = mst.utc_minus_local() / 60;
         let now = mst.ymd(2018, 11, 4).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         // 2am MST is one hour after 2am MDT
         let now = mst.ymd(2018, 11, 4).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         // After the fold, until rollover time
         // days elapsed should remain 4
         let now = mst.ymd(2018, 11, 4).and_hms(3,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         // days elapsed should increment to 6 at the rollover time
         // and not a second sooner
         let now = mst.ymd(2018, 11, 4).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 4);
+        assert_eq!(elap(crt, now, offset, 4), 5);
         let now = mst.ymd(2018, 11, 4).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mst.ymd(2018, 11, 4).and_hms(4,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mst.ymd(2018, 11, 4).and_hms(5,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mst.ymd(2018, 11, 4).and_hms(6,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         // days elapsed should remain 6 untl rollover on 5 Nov
         let now = mst.ymd(2018, 11, 4).and_hms(23,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
-        let now = mst.ymd(2018, 11, 5).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
-        let now = mst.ymd(2018, 11, 5).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
-        let now = mst.ymd(2018, 11, 5).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
-        let now = mst.ymd(2018, 11, 5).and_hms(3,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
-        let now = mst.ymd(2018, 11, 5).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
-        let now = mst.ymd(2018, 11, 5).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(0,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(1,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 7);
         // Similarly on subsequent days
         let now = mst.ymd(2018, 11, 5).and_hms(23,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mst.ymd(2018, 11, 6).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mst.ymd(2018, 11, 6).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mst.ymd(2018, 11, 6).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mst.ymd(2018, 11, 6).and_hms(3,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mst.ymd(2018, 11, 6).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mst.ymd(2018, 11, 6).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 8);
         let now = mst.ymd(2018, 11, 6).and_hms(23,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 8);
         let now = mst.ymd(2018, 11, 7).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 8);
         let now = mst.ymd(2018, 11, 7).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 8);
         let now = mst.ymd(2018, 11, 7).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 8);
 
         //
         //
@@ -604,43 +649,34 @@ mod test {
         let offset = mdt.utc_minus_local() / 60;
         println!("3am MDT");
         let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
-        // This fails - returning 5 instead of 6
-        // assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         elap(crt, now, offset, 4);
         let now = mdt.ymd(2019, 3, 10).and_hms(3,59,59).timestamp();
-        // This fails - returning 5 instead of 6
-        // assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         elap(crt, now, offset, 4);
         let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
-        // This fails - returning 6 instead of 7
-        // assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         elap(crt, now, offset, 4);
         let now = mdt.ymd(2019, 3, 10).and_hms(5,0,0).timestamp();
-        // This fails - returning 6 instead of 7
-        // assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         elap(crt, now, offset, 4);
         let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
-        // This fails - returning 7 instead of 8
-        // assert_eq!(elap(crt, now, offset, 4), 8);
+        assert_eq!(elap(crt, now, offset, 4), 8);
         elap(crt, now, offset, 4);
         let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
-        // This fails - returning 8 instead of 9
-        // assert_eq!(elap(crt, now, offset, 4), 9);
+        assert_eq!(elap(crt, now, offset, 4), 9);
         elap(crt, now, offset, 4);
 
         // Now test around the transition MDT to MST
         let now = mdt.ymd(2019, 11, 1).and_hms(4,0,0).timestamp();
-        // This fails - returning 242 instead of 243
-        // assert_eq!(elap(crt, now, offset, 4), 243);
+        assert_eq!(elap(crt, now, offset, 4), 243);
         elap(crt, now, offset, 4);
         let now = mdt.ymd(2019, 11, 2).and_hms(4,0,0).timestamp();
-        // This fails - returning 243 instead of 244
-        // assert_eq!(elap(crt, now, offset, 4), 244);
+        assert_eq!(elap(crt, now, offset, 4), 244);
         elap(crt, now, offset, 4);
         println!("2am MDT");
         let now = mdt.ymd(2019, 11, 3).and_hms(2,0,0).timestamp();
-        // This fails - returning 243 instead of 244
-        // assert_eq!(elap(crt, now, offset, 4), 244);
+        assert_eq!(elap(crt, now, offset, 4), 244);
         elap(crt, now, offset, 4);
         let offset = mst.utc_minus_local() / 60;
         println!("1am MST");
@@ -688,23 +724,17 @@ mod test {
         assert_eq!(elap(crt, now, offset, 4), 6);
         let offset = mdt.utc_minus_local() / 60;
         let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
-        // This fails - returning 5 instead of 6
-        // assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mdt.ymd(2019, 3, 10).and_hms(3,59,59).timestamp();
-        // This fails - returning 5 instead of 6
-        // assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
-        // This fails - returning 6 instead of 7
-        // assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mdt.ymd(2019, 3, 10).and_hms(5,0,0).timestamp();
-        // This fails - returning 6 instead of 7
-        // assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
-        // This fails - returning 7 instead of 8
-        // assert_eq!(elap(crt, now, offset, 4), 8);
+        assert_eq!(elap(crt, now, offset, 4), 8);
         let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
-        // This fails - returning 8 instead of 9
-        // assert_eq!(elap(crt, now, offset, 4), 9);
+        assert_eq!(elap(crt, now, offset, 4), 9);
 
 
         //
@@ -717,35 +747,35 @@ mod test {
         let now = mst.ymd(2019, 3, 3).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 0);
         let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
-        let now = mst.ymd(2019, 3, 5).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 1);
-        let now = mst.ymd(2019, 3, 6).and_hms(4,0,0).timestamp();
+        let now = mst.ymd(2019, 3, 5).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 2);
+        let now = mst.ymd(2019, 3, 6).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mst.ymd(2019, 3, 9).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
 
         // On 10 Mar, switch to MDT at 2am
         // Until the switch, days elapsed should be 5
         let now = mst.ymd(2019, 3, 10).and_hms(0,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mst.ymd(2019, 3, 10).and_hms(1,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mst.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let offset = mdt.utc_minus_local() / 60;
         let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mdt.ymd(2019, 3, 10).and_hms(3,59,59).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 5);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 6);
-        let now = mdt.ymd(2019, 3, 10).and_hms(5,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 6);
-        let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 7);
-        let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
+        let now = mdt.ymd(2019, 3, 10).and_hms(5,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 8);
+        let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 9);
 
 
 
@@ -774,24 +804,18 @@ mod test {
         assert_eq!(elap(crt, now, offset, 4), 6);
         let offset = mdt.utc_minus_local() / 60;
         let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
-        // This fails - returning 5 instead of 6
-        // assert_eq!(elap(crt, now, offset, 4), 6);
+        assert_eq!(elap(crt, now, offset, 4), 6);
         let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
-        // This fails - returning 6 instead of 7
-        // assert_eq!(elap(crt, now, offset, 4), 7);
+        assert_eq!(elap(crt, now, offset, 4), 7);
         let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
-        // This fails - returning 7 instead of 8
-        // assert_eq!(elap(crt, now, offset, 4), 8);
+        assert_eq!(elap(crt, now, offset, 4), 8);
 
         let now = mdt.ymd(2019, 11, 1).and_hms(4,0,0).timestamp();
-        // This fails - returning 242 instead of 243
-        // assert_eq!(elap(crt, now, offset, 4), 243);
+        assert_eq!(elap(crt, now, offset, 4), 243);
         let now = mdt.ymd(2019, 11, 2).and_hms(4,0,0).timestamp();
-        // This fails - returning 243 instead of 244
-        // assert_eq!(elap(crt, now, offset, 4), 244);
+        assert_eq!(elap(crt, now, offset, 4), 244);
         let now = mdt.ymd(2019, 11, 3).and_hms(2,0,0).timestamp();
-        // This fails - returning 243 instead of 244
-        // assert_eq!(elap(crt, now, offset, 4), 244);
+        assert_eq!(elap(crt, now, offset, 4), 244);
         let offset = mst.utc_minus_local() / 60;
         let now = mst.ymd(2019, 11, 3).and_hms(1,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 244);
@@ -819,48 +843,42 @@ mod test {
         let crt = mdt.ymd(2018, 11, 1).and_hms(4, 59, 59).timestamp();
         let offset = mdt.utc_minus_local() / 60;
         let now = mdt.ymd(2018, 11, 2).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 0);
-        let now = mdt.ymd(2018, 11, 3).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 1);
+        let now = mdt.ymd(2018, 11, 3).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 2);
 
         // MDT to MST Sun 4 Nov 2018 at 2am
         let now = mdt.ymd(2018, 11, 4).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 1);
+        assert_eq!(elap(crt, now, offset, 4), 2);
         let offset = mst.utc_minus_local() / 60;
         let now = mst.ymd(2018, 11, 4).and_hms(1,0,0).timestamp();
-        // This fails - returning 2 instead of 1
-        // assert_eq!(elap(crt, now, offset, 4), 1);
+        assert_eq!(elap(crt, now, offset, 4), 2);
         let now = mst.ymd(2018, 11, 4).and_hms(4,0,0).timestamp();
-        // This fails - returning 3 instead of 2
-        // assert_eq!(elap(crt, now, offset, 4), 2);
+        assert_eq!(elap(crt, now, offset, 4), 3);
         let now = mst.ymd(2018, 11, 5).and_hms(4,0,0).timestamp();
-        // This fails - returning 4 instead of 3
-        // assert_eq!(elap(crt, now, offset, 4), 3);
+        assert_eq!(elap(crt, now, offset, 4), 4);
         //...
         let now = mst.ymd(2019, 3, 9).and_hms(4,0,0).timestamp();
-        // This fails - returning 128 instead of 127
-        // assert_eq!(elap(crt, now, offset, 4), 127);
+        assert_eq!(elap(crt, now, offset, 4), 128);
 
         // MST to MDT Sun, 10 Mar 2019 at 2am
         let now = mst.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
-        // This fails - returning 128 instead of 127
-        // assert_eq!(elap(crt, now, offset, 4), 127);
+        assert_eq!(elap(crt, now, offset, 4), 128);
         let offset = mdt.utc_minus_local() / 60;
         let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 127);
-        let now = mdt.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 127);
-        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 127);
-        let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 128);
+        let now = mdt.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 128);
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 128);
+        let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 129);
 
         let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
-        assert_eq!(elap(crt, now, offset, 4), 129);
-        let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 130);
+        let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 131);
 
-        assert_eq!(777, 888);
 
 
         // Find initial conditions with remainder of days calculation
