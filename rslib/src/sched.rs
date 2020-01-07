@@ -56,7 +56,7 @@ fn days_elapsed(start: i64, end: i64, rollover_today: i64) -> u32 {
     // get the number of full days that have elapsed
     let secs = (rollover_today - start).max(0);
     let days = (secs / 86_400) as u32;
-    println!("days: {}", days);
+    println!("days: {} leaving {}", days, (secs % 86_400));
 
     // minus one if today's cutoff hasn't passed
     if days > 0 && end < rollover_today {
@@ -579,6 +579,95 @@ mod test {
         // Test transition from MST to MDT
         //
         println!();
+        println!("MST to MDT");
+        let crt = mst.ymd(2019, 3, 3).and_hms(3, 0, 1).timestamp();
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2019, 3, 3).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 0);
+        let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 1);
+        let now = mst.ymd(2019, 3, 5).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 2);
+        let now = mst.ymd(2019, 3, 6).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 3);
+        let now = mst.ymd(2019, 3, 9).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        // On 10 Mar, switch to MDT at 2am
+        // Until the switch, days elapsed should be 5
+        let now = mst.ymd(2019, 3, 10).and_hms(0,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2019, 3, 10).and_hms(1,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        println!("2am MST");
+        let now = mst.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let offset = mdt.utc_minus_local() / 60;
+        println!("3am MDT");
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        // This fails - returning 5 instead of 6
+        // assert_eq!(elap(crt, now, offset, 4), 6);
+        elap(crt, now, offset, 4);
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,59,59).timestamp();
+        // This fails - returning 5 instead of 6
+        // assert_eq!(elap(crt, now, offset, 4), 6);
+        elap(crt, now, offset, 4);
+        let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
+        // This fails - returning 6 instead of 7
+        // assert_eq!(elap(crt, now, offset, 4), 7);
+        elap(crt, now, offset, 4);
+        let now = mdt.ymd(2019, 3, 10).and_hms(5,0,0).timestamp();
+        // This fails - returning 6 instead of 7
+        // assert_eq!(elap(crt, now, offset, 4), 7);
+        elap(crt, now, offset, 4);
+        let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
+        // This fails - returning 7 instead of 8
+        // assert_eq!(elap(crt, now, offset, 4), 8);
+        elap(crt, now, offset, 4);
+        let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
+        // This fails - returning 8 instead of 9
+        // assert_eq!(elap(crt, now, offset, 4), 9);
+        elap(crt, now, offset, 4);
+
+        // Now test around the transition MDT to MST
+        let now = mdt.ymd(2019, 11, 1).and_hms(4,0,0).timestamp();
+        // This fails - returning 242 instead of 243
+        // assert_eq!(elap(crt, now, offset, 4), 243);
+        elap(crt, now, offset, 4);
+        let now = mdt.ymd(2019, 11, 2).and_hms(4,0,0).timestamp();
+        // This fails - returning 243 instead of 244
+        // assert_eq!(elap(crt, now, offset, 4), 244);
+        elap(crt, now, offset, 4);
+        println!("2am MDT");
+        let now = mdt.ymd(2019, 11, 3).and_hms(2,0,0).timestamp();
+        // This fails - returning 243 instead of 244
+        // assert_eq!(elap(crt, now, offset, 4), 244);
+        elap(crt, now, offset, 4);
+        let offset = mst.utc_minus_local() / 60;
+        println!("1am MST");
+        let now = mst.ymd(2019, 11, 3).and_hms(1,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 244);
+        let now = mst.ymd(2019, 11, 3).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 244);
+        let now = mst.ymd(2019, 11, 3).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 244);
+        let now = mst.ymd(2019, 11, 3).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 245);
+        let now = mst.ymd(2019, 11, 3).and_hms(5,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 245);
+        let now = mst.ymd(2019, 11, 4).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 246);
+        let now = mst.ymd(2019, 11, 5).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 247);
+
+        assert_eq!(555, 666);
+
+
+
+        //
+        //
+        // Test transition from MST to MDT
+        //
+        println!();
         let crt = mst.ymd(2019, 3, 3).and_hms(4, 0, 0).timestamp();
         let offset = mst.utc_minus_local() / 60;
         let now = mst.ymd(2019, 3, 3).and_hms(4,0,0).timestamp();
@@ -619,6 +708,47 @@ mod test {
         let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
         // This fails - returning 8 instead of 9
         // assert_eq!(elap(crt, now, offset, 4), 9);
+
+
+        //
+        //
+        // Test transition from MST to MDT
+        //
+        println!();
+        let crt = mst.ymd(2019, 3, 3).and_hms(4, 0, 1).timestamp();
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2019, 3, 3).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 0);
+        let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 0);
+        let now = mst.ymd(2019, 3, 5).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 1);
+        let now = mst.ymd(2019, 3, 6).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 2);
+        let now = mst.ymd(2019, 3, 9).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+
+        // On 10 Mar, switch to MDT at 2am
+        // Until the switch, days elapsed should be 5
+        let now = mst.ymd(2019, 3, 10).and_hms(0,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mst.ymd(2019, 3, 10).and_hms(1,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mst.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        let offset = mdt.utc_minus_local() / 60;
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mdt.ymd(2019, 3, 10).and_hms(5,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 8);
 
 
 
