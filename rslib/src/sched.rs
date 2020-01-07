@@ -42,9 +42,18 @@ fn rollover_for_today(
 
 /// The number of times the day rolled over between two timestamps.
 fn days_elapsed(start: i64, end: i64, rollover_today: i64) -> u32 {
+    println!();
+    let start_dt = Local.timestamp(start, 0);
+    println!("start_dt: {}", start_dt);
+    let end_dt = Local.timestamp(end, 0);
+    println!("end_dt: {}", end_dt);
+    let rollover_dt = Local.timestamp(rollover_today, 0);
+    println!("rollover_dt: {}", rollover_dt);
+
     // get the number of full days that have elapsed
     let secs = (end - start).max(0);
     let days = (secs / 86_400) as u32;
+    println!("days: {}", days);
 
     // minus one if today's cutoff hasn't passed
     if days > 0 && end < rollover_today {
@@ -116,11 +125,14 @@ mod test {
     // helper
     fn elap(start: i64, end: i64, west: i32, rollhour: i8) -> u32 {
         let today = sched_timing_today(start, end, west, rollhour);
+        println!("days elapsed: {}", today.days_elapsed);
         today.days_elapsed
     }
 
     #[test]
     fn test_days_elapsed() {
+        std::env::set_var("TZ", "America/Denver");
+
         let offset = utc_minus_local_mins();
 
         let created_dt = FixedOffset::west(offset * 60)
@@ -154,5 +166,123 @@ mod test {
         // to DST, but the number shouldn't change
         let offset = mdt.utc_minus_local() / 60;
         assert_eq!(elap(crt, now, offset, 4), 507);
+        // Test daylight saving time shift handling
+        // For TZ America/Denver
+        // To MDT 11 Mar 2018 at 2am
+        // To MST 4 Nov 2018 at 2am
+        println!();
+        let crt = mdt.ymd(2018, 10, 29).and_hms(3, 0, 0).timestamp();
+        let offset = mdt.utc_minus_local() / 60;
+        // For historical reasons, when crt is before rollover time
+        // and now is after rollover time on creation date, and up
+        // to rollover time of the next day, days_elapsed is 0
+        // instead of 1
+        let now = mdt.ymd(2018, 10, 29).and_hms(10,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 0);
+        // days elapsed becomes 1 at the rollover time on the day
+        // following the creation date and not a second sooner
+        let now = mdt.ymd(2018, 10, 30).and_hms(0,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 0);
+        let now = mdt.ymd(2018, 10, 30).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 0);
+        let now = mdt.ymd(2018, 10, 30).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 1);
+        // days elapsed should increment by 1 each day, from 
+        // the rollover time
+        let now = mdt.ymd(2018, 10, 31).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 1);
+        let now = mdt.ymd(2018, 10, 31).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 2);
+        let now = mdt.ymd(2018, 11, 1).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 2);
+        let now = mdt.ymd(2018, 11, 1).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 3);
+        let now = mdt.ymd(2018, 11, 2).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 3);
+        let now = mdt.ymd(2018, 11, 2).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 4);
+        let now = mdt.ymd(2018, 11, 3).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 4);
+        let now = mdt.ymd(2018, 11, 3).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mdt.ymd(2018, 11, 3).and_hms(23,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mdt.ymd(2018, 11, 3).and_hms(23,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        // On 4 Nov, switch to MST at 2am
+        // Until the switch, days elapsed should be 5
+        let now = mdt.ymd(2018, 11, 4).and_hms(0,0,0).timestamp();
+        // This fails - returns 4 instead of 5
+        // assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mdt.ymd(2018, 11, 4).and_hms(1,0,0).timestamp();
+        // This fails - returns 4 instead of 5
+        // assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mdt.ymd(2018, 11, 4).and_hms(1,59,59).timestamp();
+        // This fails - returns 4 instead of 5
+        // assert_eq!(elap(crt, now, offset, 4), 5);
+        // Make sure both ends of the fold are correct
+        let now = mdt.ymd(2018, 11, 4).and_hms(2,0,0).timestamp();
+        // This fails - returns 4 instead of 5
+        // assert_eq!(elap(crt, now, offset, 4), 5);
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2018, 11, 4).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        // After the fold, until rollover time
+        // days elapsed should remain 5
+        let now = mst.ymd(2018, 11, 4).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        // days elapsed should increment to 6 at the rollover time
+        // and not a second sooner
+        let now = mst.ymd(2018, 11, 4).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 5);
+        let now = mst.ymd(2018, 11, 4).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        // days elapsed should remain 6 untl rollover on 5 Nov
+        let now = mst.ymd(2018, 11, 4).and_hms(23,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(0,0,0).timestamp();
+        // This fails - returns 5 instead of 6
+        // assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(1,0,0).timestamp();
+        // This fails - returns 5 instead of 6
+        // assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2018, 11, 5).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 7);
+        // Similarly on subsequent days
+        let now = mst.ymd(2018, 11, 5).and_hms(23,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mst.ymd(2018, 11, 6).and_hms(0,0,0).timestamp();
+        // This fails - returns 6 instead of 7
+        // assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mst.ymd(2018, 11, 6).and_hms(1,0,0).timestamp();
+        // This fails - returns 6 instead of 7
+        // assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mst.ymd(2018, 11, 6).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mst.ymd(2018, 11, 6).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mst.ymd(2018, 11, 6).and_hms(3,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mst.ymd(2018, 11, 6).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 8);
+        let now = mst.ymd(2018, 11, 6).and_hms(23,59,59).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 8);
+        let now = mst.ymd(2018, 11, 7).and_hms(0,0,0).timestamp();
+        // This fails - returns 7 instead of 8
+        // assert_eq!(elap(crt, now, offset, 4), 8);
+        let now = mst.ymd(2018, 11, 7).and_hms(1,0,0).timestamp();
+        // This fails - returns 7 instead of 8
+        // assert_eq!(elap(crt, now, offset, 4), 8);
+        let now = mst.ymd(2018, 11, 7).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 8);
+
+        assert_eq!(1, 2);
+
     }
 }
