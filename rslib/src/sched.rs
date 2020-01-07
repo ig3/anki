@@ -659,9 +659,6 @@ mod test {
         let now = mst.ymd(2019, 11, 5).and_hms(4,0,0).timestamp();
         assert_eq!(elap(crt, now, offset, 4), 247);
 
-        assert_eq!(555, 666);
-
-
 
         //
         //
@@ -751,6 +748,158 @@ mod test {
         assert_eq!(elap(crt, now, offset, 4), 8);
 
 
+
+        // If creation is less than one hour before rollover the
+        // remainder of the days calculation is less than 3600.
+        // This will be problematic if the collection is created
+        // during standard time as the subsequent transition to
+        // DST makes the day an hour shorter. On the day of the
+        // transition to DST, days will decrement at the time of
+        // transition to DST, causing a 1 day offset for the 
+        // duration of DST. Then, on the subsequent transition 
+        // from DST it will increment at the transition.
+        println!();
+        println!("remainder 0 to 3600");
+        let crt = mst.ymd(2019, 3, 3).and_hms(3, 0, 1).timestamp();
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 1);
+        let now = mst.ymd(2019, 3, 5).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 2);
+        // At the transition to DST the day is an hour shorter
+        // causing days to not increment on the day of transition.
+        let now = mst.ymd(2019, 3, 9).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mst.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 6);
+        let offset = mdt.utc_minus_local() / 60;
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        // This fails - returning 5 instead of 6
+        // assert_eq!(elap(crt, now, offset, 4), 6);
+        let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
+        // This fails - returning 6 instead of 7
+        // assert_eq!(elap(crt, now, offset, 4), 7);
+        let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
+        // This fails - returning 7 instead of 8
+        // assert_eq!(elap(crt, now, offset, 4), 8);
+
+        let now = mdt.ymd(2019, 11, 1).and_hms(4,0,0).timestamp();
+        // This fails - returning 242 instead of 243
+        // assert_eq!(elap(crt, now, offset, 4), 243);
+        let now = mdt.ymd(2019, 11, 2).and_hms(4,0,0).timestamp();
+        // This fails - returning 243 instead of 244
+        // assert_eq!(elap(crt, now, offset, 4), 244);
+        let now = mdt.ymd(2019, 11, 3).and_hms(2,0,0).timestamp();
+        // This fails - returning 243 instead of 244
+        // assert_eq!(elap(crt, now, offset, 4), 244);
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2019, 11, 3).and_hms(1,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 244);
+        let now = mst.ymd(2019, 11, 3).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 244);
+        let now = mst.ymd(2019, 11, 3).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 244);
+        let now = mst.ymd(2019, 11, 3).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 245);
+        let now = mst.ymd(2019, 11, 4).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 246);
+
+        // If creation is less than one hour after rollover the
+        // remainder of the days calculation is more than 82800.
+        // This will be problematic if the collection is created
+        // during DST as the subsequent transition to standard
+        // time makes the day an hour longer. On the day of the
+        // transition to standard time, days will increment at
+        // the time of transition to standard time, causing a 1
+        // day offset for the duration of standard time. Then,
+        // on the subsequent transition back to DST it will
+        // decrement at the transition.
+        println!();
+        println!("remainder 0 to 3600");
+        let crt = mdt.ymd(2018, 11, 1).and_hms(4, 59, 59).timestamp();
+        let offset = mdt.utc_minus_local() / 60;
+        let now = mdt.ymd(2018, 11, 2).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 0);
+        let now = mdt.ymd(2018, 11, 3).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 1);
+
+        // MDT to MST Sun 4 Nov 2018 at 2am
+        let now = mdt.ymd(2018, 11, 4).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 1);
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2018, 11, 4).and_hms(1,0,0).timestamp();
+        // This fails - returning 2 instead of 1
+        // assert_eq!(elap(crt, now, offset, 4), 1);
+        let now = mst.ymd(2018, 11, 4).and_hms(4,0,0).timestamp();
+        // This fails - returning 3 instead of 2
+        // assert_eq!(elap(crt, now, offset, 4), 2);
+        let now = mst.ymd(2018, 11, 5).and_hms(4,0,0).timestamp();
+        // This fails - returning 4 instead of 3
+        // assert_eq!(elap(crt, now, offset, 4), 3);
+        //...
+        let now = mst.ymd(2019, 3, 9).and_hms(4,0,0).timestamp();
+        // This fails - returning 128 instead of 127
+        // assert_eq!(elap(crt, now, offset, 4), 127);
+
+        // MST to MDT Sun, 10 Mar 2019 at 2am
+        let now = mst.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
+        // This fails - returning 128 instead of 127
+        // assert_eq!(elap(crt, now, offset, 4), 127);
+        let offset = mdt.utc_minus_local() / 60;
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 127);
+        let now = mdt.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 127);
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 127);
+        let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 128);
+
+        let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 129);
+        let now = mdt.ymd(2019, 3, 12).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, offset, 4), 130);
+
+        assert_eq!(777, 888);
+
+
+        // Find initial conditions with remainder of days calculation
+        // in the range 0 to 3600. These will be problematic when a
+        // transition to/from DST makes a day an hour shorter.
+        //
+        // Remainder of the days calculation is in the range 0 to 3600
+        // if creation time is in the hour before rollover time. These
+        // cases will be problematic when a transition to DST make the
+        // day one hour shorter.
+        println!();
+        println!("remainder 0 to 3600");
+        let crt = mst.ymd(2019, 3, 3).and_hms(4, 0, 0).timestamp();
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
+        // assert_eq!(elap(crt, now, offset, 4), 0);
+        elap(crt, now, offset, 4);
+        let crt = mst.ymd(2019, 3, 3).and_hms(3, 0, 0).timestamp();
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
+        // assert_eq!(elap(crt, now, offset, 4), 0);
+        elap(crt, now, offset, 4);
+
+
+        // Find initial conditions with remainder of days calculation
+        // in the range 82800 to 86399. These will be problematic when
+        // a transition to/from DST makes a day an hour longer.
+        println!();
+        println!("remainder 82800 to 86399");
+        let crt = mst.ymd(2019, 3, 3).and_hms(4, 0, 1).timestamp();
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
+        // assert_eq!(elap(crt, now, offset, 4), 0);
+        elap(crt, now, offset, 4);
+        let crt = mst.ymd(2019, 3, 3).and_hms(5, 0, 0).timestamp();
+        let offset = mst.utc_minus_local() / 60;
+        let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
+        // assert_eq!(elap(crt, now, offset, 4), 0);
+        elap(crt, now, offset, 4);
 
         // sure to fail
         assert_eq!(111, 222);
