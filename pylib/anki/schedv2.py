@@ -1,6 +1,8 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+from __future__ import annotations
+
 import datetime
 import itertools
 import random
@@ -38,7 +40,7 @@ class Scheduler:
     _burySiblingsOnAnswer = True
     revCount: int
 
-    def __init__(self, col: "anki.storage._Collection") -> None:
+    def __init__(self, col: anki.storage._Collection) -> None:
         self.col = col
         self.queueLimit = 50
         self.reportLimit = 1000
@@ -1393,22 +1395,44 @@ where id = ?
     def _rolloverHour(self) -> int:
         return self.col.conf.get("rollover", 4)
 
+    # New timezone handling
+    ##########################################################################
+
     def _newTimezoneEnabled(self) -> bool:
-        return self.col.conf.get("newTimezone", False)
+        return self.col.conf.get("creationOffset") is not None
 
     def _timingToday(self) -> SchedTimingToday:
         return self.col.backend.sched_timing_today(
-            self.col.crt, intTime(), self.timezoneOffset(), self._rolloverHour(),
+            self.col.crt,
+            self.creationTimezoneOffset(),
+            intTime(),
+            self.currentTimezoneOffset(),
+            self._rolloverHour(),
         )
 
-    def timezoneOffset(self) -> int:
+    def currentTimezoneOffset(self) -> int:
         if self.col.server:
             return self.col.conf.get("localOffset", 0)
         else:
-            if time.localtime().tm_isdst:
-                return time.altzone // 60
-            else:
-                return time.timezone // 60
+            return self._localOffsetForDate(datetime.datetime.today())
+
+    def creationTimezoneOffset(self) -> int:
+        return self.col.conf.get("creationOffset", 0)
+
+    def setCreationOffset(self):
+        """Save the UTC west offset at the time of creation into the DB.
+
+        Once stored, this activates the new timezone handling code.
+        """
+        mins_west = self._localOffsetForDate(
+            datetime.datetime.fromtimestamp(self.col.crt)
+        )
+        self.col.conf["creationOffset"] = mins_west
+        self.col.setMod()
+
+    def _localOffsetForDate(self, date: datetime.datetime) -> int:
+        "Minutes west of UTC for a given datetime in the local timezone."
+        return date.astimezone().utcoffset().seconds // -60
 
     # Deck finished state
     ##########################################################################

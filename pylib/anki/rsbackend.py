@@ -1,8 +1,8 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 # pylint: skip-file
-
-from typing import Dict, List
+from dataclasses import dataclass
+from typing import Dict, List, Union
 
 import ankirspy  # pytype: disable=import-error
 
@@ -46,6 +46,12 @@ def proto_template_reqs_to_legacy(
     return legacy_reqs
 
 
+@dataclass
+class TemplateReplacement:
+    field_name: str
+    filters: List[str]
+
+
 class RustBackend:
     def __init__(self, path: str):
         self._backend = ankirspy.Backend(path)
@@ -79,12 +85,44 @@ class RustBackend:
         return proto_template_reqs_to_legacy(reqs)
 
     def sched_timing_today(
-        self, start: int, end: int, offset: int, rollover: int
+        self,
+        created_secs: int,
+        created_mins_west: int,
+        now_secs: int,
+        now_mins_west: int,
+        rollover: int,
     ) -> SchedTimingToday:
         return self._run_command(
             pb.BackendInput(
                 sched_timing_today=pb.SchedTimingTodayIn(
-                    created=start, now=end, minutes_west=offset, rollover_hour=rollover,
+                    created_secs=created_secs,
+                    created_mins_west=created_mins_west,
+                    now_secs=now_secs,
+                    now_mins_west=now_mins_west,
+                    rollover_hour=rollover,
                 )
             )
         ).sched_timing_today
+
+    def flatten_template(
+        self, template: str, nonempty_fields: List[str]
+    ) -> List[Union[str, TemplateReplacement]]:
+        out = self._run_command(
+            pb.BackendInput(
+                flatten_template=pb.FlattenTemplateIn(
+                    template_text=template, nonempty_field_names=nonempty_fields
+                )
+            )
+        ).flatten_template
+        results: List[Union[str, TemplateReplacement]] = []
+        for node in out.nodes:
+            if node.WhichOneof("value") == "text":
+                results.append(node.text)
+            else:
+                results.append(
+                    TemplateReplacement(
+                        field_name=node.replacement.field_name,
+                        filters=list(node.replacement.filters),
+                    )
+                )
+        return results

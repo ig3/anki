@@ -1,0 +1,25 @@
+/// The number of times the day rolled over between two timestamps.
+fn days_elapsed(start: i64, end: i64, rollover_today: i64) -> u32 {
+
+    let rollover_dt = Local.timestamp(rollover_today, 0);
+
+    let start_dt = Local.timestamp(start, 0);
+
+    let reference_dt = Local
+        .ymd(start_dt.year(), start_dt.month(), start_dt.day())
+        .and_hms(rollover_dt.hour(), 0, 0);
+
+    let reference = reference_dt.timestamp() - 3601;
+
+
+    // get the number of full days that have elapsed
+    let secs = (rollover_today - reference).max(0);
+    let days = (secs / 86_400) as u32;
+
+    // minus one if today's cutoff hasn't passed
+    if days > 0 && end < rollover_today {
+        days - 1
+    } else {
+        days
+    }
+}
