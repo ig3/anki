@@ -1007,6 +1007,73 @@ mod test {
         // assert_eq!(elap(crt, now, mst_offset, mst_offset, 4), 0);
         elap(crt, now, mst_offset, mst_offset, 4);
 
+
+        // Try to find a fault with the 2020/01/09 implementation
+        // 
+        println!();
+        println!("Fault with rollover_passed???");
+        let crt = mst.ymd(2019, 3, 3).and_hms(3, 0, 1).timestamp();
+        let now = mst.ymd(2019, 3, 4).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, mst_offset, 3), 1);
+        let now = mst.ymd(2019, 3, 5).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, mst_offset, 3), 2);
+        // At the transition to DST the day is an hour shorter
+        // causing days to not increment on the day of transition.
+        let now = mst.ymd(2019, 3, 10).and_hms(1,59,59).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, mst_offset, 3), 6);
+        let now = mst.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
+        // This fails - returning 6 instead of 7
+        // assert_eq!(elap(crt, now, mst_offset, mst_offset, 3), 7);
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, mdt_offset, 3), 7);
+        let now = mdt.ymd(2019, 3, 10).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, mdt_offset, 3), 7);
+        let now = mdt.ymd(2019, 3, 11).and_hms(4,0,0).timestamp();
+        assert_eq!(elap(crt, now, mst_offset, mdt_offset, 3), 8);
+
+        
+        println!("rollover at 2");
+        let crt = mdt.ymd(2018, 11, 1).and_hms(4, 59, 59).timestamp();
+        let now = mdt.ymd(2018, 11, 2).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 1);
+        let now = mdt.ymd(2018, 11, 3).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 2);
+
+        // MDT to MST Sun 4 Nov 2018 at 2am
+        let now = mdt.ymd(2018, 11, 4).and_hms(1,59,59).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 2);
+        let now = mdt.ymd(2018, 11, 4).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 2);
+        let now = mst.ymd(2018, 11, 4).and_hms(1,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mst_offset, 3), 2);
+        let now = mst.ymd(2018, 11, 4).and_hms(1,0,1).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mst_offset, 3), 2);
+        let now = mst.ymd(2018, 11, 4).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mst_offset, 3), 3);
+        //...
+        let now = mst.ymd(2019, 3, 9).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mst_offset, 3), 128);
+
+        // MST to MDT Sun, 10 Mar 2019 at 2am
+        let now = mst.ymd(2019, 3, 10).and_hms(1,59,59).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mst_offset, 3), 128);
+        let now = mst.ymd(2019, 3, 10).and_hms(2,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mst_offset, 3), 129);
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 129);
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,1).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 129);
+        let now = mdt.ymd(2019, 3, 10).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 129);
+
+        let now = mdt.ymd(2019, 3, 11).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 130);
+        let now = mdt.ymd(2019, 3, 12).and_hms(3,0,0).timestamp();
+        assert_eq!(elap(crt, now, mdt_offset, mdt_offset, 3), 131);
+
+
+
+
         // sure to fail
         assert_eq!(111, 222);
 
