@@ -1386,11 +1386,15 @@ where id = ?
         return stamp
 
     def _daysSinceCreation(self) -> int:
-        startDate = datetime.datetime.fromtimestamp(self.col.crt)
-        startDate = startDate.replace(
+        from datetime import date
+        startDate = datetime.datetime.fromtimestamp(self.col.crt).date()
+        rolloverTime = datetime.datetime.now().replace(
             hour=self._rolloverHour(), minute=0, second=0, microsecond=0
         )
-        return int((time.time() - time.mktime(startDate.timetuple())) // 86400)
+        days = (date.today() - startDate).days
+        if datetime.datetime.now() < rolloverTime:
+            days = days -1
+        return max(0, days)
 
     def _rolloverHour(self) -> int:
         return self.col.conf.get("rollover", 4)
