@@ -1104,7 +1104,7 @@ and type=0""",
             if os.path.exists(lpath2):
                 os.unlink(lpath2)
             os.rename(lpath, lpath2)
-        self._logHnd = open(lpath, "a", encoding="utf8")
+        self._logHnd = open(lpath, "a", encoding="utf8", buffering=1)
 
     def _closeLog(self) -> None:
         if not self._debugLog:
