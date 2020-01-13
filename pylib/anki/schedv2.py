@@ -32,6 +32,9 @@ QUEUE_TYPE_MANUALLY_BURIED = -3
 # revlog types: 0=lrn, 1=rev, 2=relrn, 3=early review
 # positive revlog intervals are in days (rev), negative in seconds (lrn)
 # odue/odid store original due/did when cards moved to filtered deck
+# cards.left: <left today> * 1000 + <real left count>
+# where <left today> is the number of views that can be completed before
+# the day cutoff
 
 
 class Scheduler:
@@ -74,7 +77,19 @@ class Scheduler:
         self._haveQueues = True
 
     def answerCard(self, card: Card, ease: int) -> None:
+        """
+        Update a card when an answer is given
+
+        Parameters
+        ----------
+        card : Card
+            the card that was answered
+        ease : int
+            How easy the card was on a scale of 1 (hard) to 4 (easy)
+
+        """
         self.col.log()
+        self.col.log('answer', ease)
         assert 1 <= ease <= 4
         assert 0 <= card.queue <= 4
         self.col.markReview(card)
@@ -89,6 +104,21 @@ class Scheduler:
         card.flushSched()
 
     def _answerCard(self, card: Card, ease: int) -> None:
+        """
+        Update a card when an answer is given
+
+        Perform an update, depending on the queue the card is in.
+
+        When a new card is answered, move it to the learning queue.
+
+        Parameters
+        ----------
+        card : Card
+            the card that was answered
+        ease : int
+            How easy the card was on a scale of 1 (hard) to 4 (easy)
+
+        """
         if self._previewingCard(card):
             self._answerCardPreview(card, ease)
             return
@@ -490,6 +520,7 @@ select id from cards where did in %s and queue = 0 limit ?)"""
 
     # scan for any newly due learning cards every minute
     def _updateLrnCutoff(self, force: bool) -> bool:
+        # collapseTime is collection preferences 'Learn ahead limit'
         nextCutoff = intTime() + self.col.conf["collapseTime"]
         if nextCutoff - self._lrnCutoff > 60 or force:
             self._lrnCutoff = nextCutoff
@@ -541,6 +572,7 @@ select count() from cards where did in %s and queue = {QUEUE_TYPE_PREVIEW}
             return False
         if self._lrnQueue:
             return True
+        # collapseTime is collection preferences 'Learn ahead limit'
         cutoff = intTime() + self.col.conf["collapseTime"]
         self._lrnQueue = self.col.db.all(
             f"""
@@ -559,6 +591,7 @@ limit %d"""
         if self._fillLrn():
             cutoff = time.time()
             if collapse:
+                # collapseTime is collection preferences 'Learn ahead limit'
                 cutoff += self.col.conf["collapseTime"]
             if self._lrnQueue[0][0] < cutoff:
                 id = heappop(self._lrnQueue)[1]
@@ -605,6 +638,18 @@ did = ? and queue = {QUEUE_TYPE_DAY_LEARN_RELEARN} and due <= ? limit ?""",
         return None
 
     def _answerLrnCard(self, card: Card, ease: int) -> None:
+        """
+        Update a learning card when an answer is given
+
+        Parameters
+        ----------
+        card : Card
+            the card that was answered
+        ease : int
+            How easy the card was on a scale of 1 (hard) to 4 (easy)
+
+        """
+        self.col.log()
         conf = self._lrnConf(card)
         if card.type in (2, CARD_TYPE_RELEARNING):
             type = 2
@@ -662,18 +707,20 @@ did = ? and queue = {QUEUE_TYPE_DAY_LEARN_RELEARN} and due <= ? limit ?""",
     def _rescheduleLrnCard(
         self, card: Card, conf: Dict[str, Any], delay: Optional[int] = None
     ) -> Any:
+        self.col.log()
         # normal delay for the current step?
         if delay is None:
             delay = self._delayForGrade(conf, card.left)
 
         card.due = int(time.time() + delay)
+        # add some randomness, up to 5 minutes or 25%
+        maxExtra = min(300, int(delay * 0.25))
+        fuzz = random.randrange(0, maxExtra)
+        card.due = card.due + fuzz
         # due today?
         if card.due < self.dayCutoff:
-            # add some randomness, up to 5 minutes or 25%
-            maxExtra = min(300, int(delay * 0.25))
-            fuzz = random.randrange(0, maxExtra)
-            card.due = min(self.dayCutoff - 1, card.due + fuzz)
             card.queue = 1
+            # collapseTime is collection preferences 'Learn ahead limit'
             if card.due < (intTime() + self.col.conf["collapseTime"]):
                 self.lrnCount += 1
                 # if the queue is not empty and there's nothing else to do, make
@@ -693,6 +740,7 @@ did = ? and queue = {QUEUE_TYPE_DAY_LEARN_RELEARN} and due <= ? limit ?""",
 
     def _delayForGrade(self, conf: Dict[str, Any], left: int) -> Any:
         left = left % 1000
+        self.col.log('left: ', left, "delays: ", conf["delays"])
         try:
             delay = conf["delays"][-left]
         except IndexError:
@@ -701,16 +749,20 @@ did = ? and queue = {QUEUE_TYPE_DAY_LEARN_RELEARN} and due <= ? limit ?""",
             else:
                 # user deleted final step; use dummy value
                 delay = 1
+        self.col.log('delay: ', delay)
         return delay * 60
 
     def _delayForRepeatingGrade(self, conf: Dict[str, Any], left: int) -> Any:
+        self.col.log(left)
         # halfway between last and next
         delay1 = self._delayForGrade(conf, left)
         if len(conf["delays"]) > 1:
             delay2 = self._delayForGrade(conf, left - 1)
         else:
             delay2 = delay1 * 2
+        self.col.log("delay1: ", delay1, "delay2: ", delay2)
         avg = (delay1 + max(delay1, delay2)) // 2
+        self.col.log("delay for repeating: ", avg)
         return avg
 
     def _lrnConf(self, card: Card) -> Any:
@@ -797,6 +849,7 @@ did = ? and queue = {QUEUE_TYPE_DAY_LEARN_RELEARN} and due <= ? limit ?""",
         type: int,
         lastLeft: int,
     ) -> None:
+        self.col.log()
         lastIvl = -(self._delayForGrade(conf, lastLeft))
         ivl = card.ivl if leaving else -(self._delayForGrade(conf, card.left))
 
@@ -804,6 +857,17 @@ did = ? and queue = {QUEUE_TYPE_DAY_LEARN_RELEARN} and due <= ? limit ?""",
             self.col.db.execute(
                 "insert into revlog values (?,?,?,?,?,?,?,?,?)",
                 int(time.time() * 1000),
+                card.id,
+                self.col.usn(),
+                ease,
+                ivl,
+                lastIvl,
+                card.factor,
+                card.timeTaken(),
+                type,
+            )
+            self.col.log(
+                'learn',
                 card.id,
                 self.col.usn(),
                 ease,
@@ -1009,6 +1073,17 @@ select id from cards where did in %s and queue = 2 and due <= ? limit ?)"""
             self.col.db.execute(
                 "insert into revlog values (?,?,?,?,?,?,?,?,?)",
                 int(time.time() * 1000),
+                card.id,
+                self.col.usn(),
+                ease,
+                -delay or card.ivl,
+                card.lastIvl,
+                card.factor,
+                card.timeTaken(),
+                type,
+            )
+            self.col.log(
+                'review',
                 card.id,
                 self.col.usn(),
                 ease,
