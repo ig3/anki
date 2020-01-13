@@ -740,7 +740,6 @@ did = ? and queue = {QUEUE_TYPE_DAY_LEARN_RELEARN} and due <= ? limit ?""",
 
     def _delayForGrade(self, conf: Dict[str, Any], left: int) -> Any:
         left = left % 1000
-        self.col.log('left: ', left, "delays: ", conf["delays"])
         try:
             delay = conf["delays"][-left]
         except IndexError:
@@ -749,20 +748,16 @@ did = ? and queue = {QUEUE_TYPE_DAY_LEARN_RELEARN} and due <= ? limit ?""",
             else:
                 # user deleted final step; use dummy value
                 delay = 1
-        self.col.log('delay: ', delay)
         return delay * 60
 
     def _delayForRepeatingGrade(self, conf: Dict[str, Any], left: int) -> Any:
-        self.col.log(left)
         # halfway between last and next
         delay1 = self._delayForGrade(conf, left)
         if len(conf["delays"]) > 1:
             delay2 = self._delayForGrade(conf, left - 1)
         else:
             delay2 = delay1 * 2
-        self.col.log("delay1: ", delay1, "delay2: ", delay2)
         avg = (delay1 + max(delay1, delay2)) // 2
-        self.col.log("delay for repeating: ", avg)
         return avg
 
     def _lrnConf(self, card: Card) -> Any:
